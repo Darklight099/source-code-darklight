@@ -1,0 +1,40 @@
+ollama:
+  model: "llama3.2:latest"  # Changed from llama2 to llama3.2
+  base_url: "http://localhost:11434"
+  temperature: 0.3
+  max_tokens: 2000
+
+scan:
+  timeout: 10
+  max_pages: 50
+  user_agent: "WebVulnAnalyzer/1.0"
+  
+vulnerability_patterns:
+  sql_injection:
+    - "SELECT.*FROM"
+    - "INSERT INTO"
+    - "UPDATE.*SET"
+    - "DELETE FROM"
+    - "\\$\\_GET"
+    - "\\$\\_POST"
+    
+  xss:
+    - "document\\.write"
+    - "innerHTML"
+    - "eval\\("
+    - "setTimeout\\(.*\\)"
+    - "location\\.hash"
+    - "\\\\<script\\\\>"
+    
+  command_injection:
+    - "system\\("
+    - "exec\\("
+    - "shell_exec\\("
+    - "popen\\("
+    
+  sensitive_data:
+    - "password"
+    - "secret"
+    - "api_key"
+    - "token"
+    - "private_key"

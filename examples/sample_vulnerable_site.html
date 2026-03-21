@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sample Vulnerable Site (For Testing)</title>
+    <script>
+        // Hardcoded secret - VULNERABILITY
+        const API_KEY = "sk-1234567890abcdef";
+        
+        // XSS vulnerability
+        function displayMessage() {
+            var message = new URLSearchParams(window.location.search).get('msg');
+            document.write(message); // VULNERABLE to XSS
+        }
+        
+        // eval usage - VULNERABILITY
+        function executeCode() {
+            var userInput = document.getElementById('code').value;
+            eval(userInput); // DANGEROUS
+        }
+        
+        // SQL injection simulation
+        function searchUser() {
+            var username = document.getElementById('username').value;
+            // VULNERABLE: SQL injection
+            var query = "SELECT * FROM users WHERE username = '" + username + "'";
+            console.log(query);
+        }
+    </script>
+    <style>
+        /* Inline style with sensitive info - VULNERABILITY */
+        /* TODO: Remove debug password: admin123 */
+    </style>
+</head>
+<body>
+    <h1>Sample Vulnerable Login Page</h1>
+    
+    <!-- Sensitive info in comment - VULNERABILITY -->
+    <!-- Database password: db_pass_2024! -->
+    
+    <form action="" method="get">
+        <input type="text" name="username" id="username" placeholder="Username">
+        <input type="password" name="password" placeholder="Password">
+        <button type="submit">Login</button>
+    </form>
+    
+    <div onclick="displayMessage()">Click me</div>
+    
+    <input type="text" id="code" placeholder="Enter code to execute">
+    <button onclick="executeCode()">Execute</button>
+    
+    <script>
+        // Another XSS vector
+        var userInput = location.hash.substring(1);
+        document.getElementById('user').innerHTML = userInput; // VULNERABLE
+    </script>
+</body>
+</html>
