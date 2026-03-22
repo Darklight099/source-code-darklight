@@ -2,6 +2,7 @@ import re
 from typing import Dict, List, Any, Set
 import logging
 from colorama import Fore, Style
+from bs4 import BeautifulSoup
 
 class VulnerabilityAnalyzer:
     """Analyzes source code for potential vulnerabilities"""
@@ -37,8 +38,29 @@ class VulnerabilityAnalyzer:
         """Analyze HTML for vulnerabilities"""
         vulns = []
         
+        # Parse HTML with BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Check for coupon/code forms (SQL injection targets)
+        for form in soup.find_all('form'):
+            for input_field in form.find_all('input'):
+                input_name = input_field.get('name', '').lower()
+                input_id = input_field.get('id', '').lower()
+                input_placeholder = input_field.get('placeholder', '').lower()
+                
+                # Check for coupon/code related inputs
+                if any(keyword in input_name or keyword in input_id or keyword in input_placeholder 
+                       for keyword in ['coupon', 'code', 'voucher', 'discount', 'promo']):
+                    vulns.append({
+                        'type': 'sql_injection_coupon_code',
+                        'severity': 'Critical',
+                        'location': url,
+                        'description': f'Coupon/code input field "{input_field.get("name", "")}" found. This is a common SQL injection target.',
+                        'code_snippet': f'<input type="{input_field.get("type", "text")}" name="{input_field.get("name", "")}">'
+                    })
+        
         # Check for missing CSRF tokens
-        if '<form' in html and 'csrf' not in html.lower():
+        if '<form' in html and 'csrf' not in html.lower() and 'token' not in html.lower():
             vulns.append({
                 'type': 'missing_csrf',
                 'severity': 'Medium',
@@ -60,7 +82,7 @@ class VulnerabilityAnalyzer:
         # Check for comments containing sensitive info
         comments = re.findall(r'<!--(.*?)-->', html, re.DOTALL)
         for comment in comments:
-            sensitive_keywords = ['password', 'api', 'key', 'secret', 'token', 'todo']
+            sensitive_keywords = ['password', 'api', 'key', 'secret', 'token', 'todo', 'sql', 'query']
             for keyword in sensitive_keywords:
                 if keyword in comment.lower():
                     vulns.append({
@@ -77,6 +99,27 @@ class VulnerabilityAnalyzer:
     def analyze_javascript(self, js: str, url: str) -> List[Dict]:
         """Analyze JavaScript for vulnerabilities"""
         vulns = []
+        
+        # Check for SQL injection patterns in JavaScript
+        sql_patterns = [
+            r'(SELECT|INSERT|UPDATE|DELETE|DROP).*?\+',
+            r'\$\{.*?\}.*?(SELECT|INSERT|UPDATE)',
+            r'\.query\(.*?\$',
+            r'\.exec\(.*?\$',
+            r'mysql_query\(.*?\$',
+            r'mysqli_query\(.*?\$'
+        ]
+        
+        for pattern in sql_patterns:
+            matches = re.finditer(pattern, js, re.IGNORECASE)
+            for match in matches:
+                vulns.append({
+                    'type': 'sql_injection_javascript',
+                    'severity': 'Critical',
+                    'location': url,
+                    'description': f'Potential SQL injection in JavaScript: {match.group()[:100]}',
+                    'code_snippet': self.extract_code_snippet(js, match.group(), 150)
+                })
         
         # Check for XSS vectors
         xss_patterns = self.patterns.get('xss', [])
@@ -130,9 +173,9 @@ class VulnerabilityAnalyzer:
         vulns = []
         
         # Check for potentially dangerous inline handlers
-        dangerous_handlers = ['onclick', 'onload', 'onerror', 'onmouseover']
+        dangerous_handlers = ['onclick', 'onload', 'onerror', 'onmouseover', 'onsubmit']
         if handler['event'] in dangerous_handlers:
-            if any(char in handler['value'] for char in ['<', '>', '"', "'", ';']):
+            if any(char in handler['value'] for char in ['<', '>', '"', "'", ';', '(', ')']):
                 vulns.append({
                     'type': 'inline_xss',
                     'severity': 'High',
@@ -144,7 +187,7 @@ class VulnerabilityAnalyzer:
         return vulns
     
     def analyze_form(self, form: Dict, url: str) -> List[Dict]:
-        """Analyze forms for security issues"""
+        """Analyze forms for security issues including potential SQL injection points"""
         vulns = []
         
         # Check if form action is empty (submits to same page)
@@ -157,7 +200,7 @@ class VulnerabilityAnalyzer:
                 'code_snippet': f'Form with action="{form["action"]}"'
             })
         
-        # Check for password fields without HTTPS (only if we detect it)
+        # Check for password fields without HTTPS
         for input_field in form['inputs']:
             if input_field['type'] == 'password':
                 vulns.append({
@@ -167,6 +210,21 @@ class VulnerabilityAnalyzer:
                     'description': 'Password field found - ensure HTTPS is used',
                     'code_snippet': f'Password input in form: {input_field}'
                 })
+            
+            # Detect potential SQL injection points in form inputs
+            if input_field['type'] in ['text', 'search', 'number', 'email', 'hidden']:
+                # Check for common SQL injection indicators in input names
+                sqli_indicators = ['user', 'username', 'email', 'id', 'code', 'coupon', 'search', 'query', 'name', 'product', 'category']
+                input_name = input_field.get('name', '').lower()
+                
+                if any(indicator in input_name for indicator in sqli_indicators):
+                    vulns.append({
+                        'type': 'potential_sql_injection',
+                        'severity': 'Critical',
+                        'location': url,
+                        'description': f"Input field '{input_field['name']}' may be vulnerable to SQL injection. This field name suggests it might be used in database queries.",
+                        'code_snippet': f'<input type="{input_field["type"]}" name="{input_field["name"]}">'
+                    })
         
         return vulns
     

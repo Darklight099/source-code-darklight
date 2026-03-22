@@ -17,12 +17,22 @@ performance:
   
 vulnerability_patterns:
   sql_injection:
-    - "SELECT.*FROM"
-    - "INSERT INTO"
-    - "UPDATE.*SET"
-    - "DELETE FROM"
-    - "\\$\\_GET"
-    - "\\$\\_POST"
+    - "SELECT.*FROM.*\\+"
+    - "INSERT INTO.*\\+"
+    - "UPDATE.*SET.*\\+"
+    - "DELETE FROM.*\\+"
+    - "\\$\\_GET\\[.*\\]"
+    - "\\$\\_POST\\[.*\\]"
+    - "\\.query\\(.*\\$"
+    - "mysql_query\\(.*\\$"
+    - "mysqli_query\\(.*\\$"
+    - "PDO::query\\(.*\\$"
+    - "exec\\(.*\\$"
+    - "WHERE.*=.*\\+"
+    - "coupon.*=.*\\+"
+    - "code.*=.*\\+"
+    - "SELECT.*FROM.*coupon"
+    - "UPDATE.*coupon"
     
   xss:
     - "document\\.write"
@@ -31,12 +41,15 @@ vulnerability_patterns:
     - "setTimeout\\(.*\\)"
     - "location\\.hash"
     - "\\\\<script\\\\>"
+    - "\\$\\{\\}.*innerHTML"
+    - "React\\.dangerouslySetInnerHTML"
     
   command_injection:
     - "system\\("
     - "exec\\("
     - "shell_exec\\("
     - "popen\\("
+    - "passthru\\("
     
   sensitive_data:
     - "password"
@@ -44,3 +57,5 @@ vulnerability_patterns:
     - "api_key"
     - "token"
     - "private_key"
+    - "db_password"
+    - "database.*password"
