@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DarkLight - AI-Powered Web Vulnerability Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background: rgba(0,0,0,0.8) !important;
+            backdrop-filter: blur(10px);
+        }
+        .hero {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+        .hero p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        .scan-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .vuln-card {
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .vuln-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .vuln-header {
+            padding: 20px;
+            cursor: pointer;
+            border-left: 5px solid;
+        }
+        .severity-Critical { border-left-color: #dc3545; background: #fff5f5; }
+        .severity-High { border-left-color: #fd7e14; background: #fff8f0; }
+        .severity-Medium { border-left-color: #ffc107; background: #fffef0; }
+        .severity-Low { border-left-color: #28a745; background: #f0fff4; }
+        .vuln-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+            margin-left: 10px;
+        }
+        .badge-Critical { background: #dc3545; }
+        .badge-High { background: #fd7e14; }
+        .badge-Medium { background: #ffc107; color: #333; }
+        .badge-Low { background: #28a745; }
+        .vuln-location {
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+        .vuln-content {
+            padding: 20px;
+            display: none;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+        .vuln-content.active {
+            display: block;
+        }
+        .code-snippet {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            margin: 15px 0;
+        }
+        .line-number {
+            background: #2d2d2d;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .exploit-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .exploit-section h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        .tool-command {
+            background: #2d2d2d;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            margin-top: 40px;
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark">
+        <div class="container">
+            <span class="navbar-brand">
+                <i class="fas fa-shield-alt"></i> DarkLight Security Analyzer
+            </span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="hero">
+            <h1><i class="fas fa-code"></i> Source Code DarkLight</h1>
+            <p>AI-Powered Web Vulnerability Scanner with Offline Exploitation Guides</p>
+        </div>
+
+        <div class="scan-card">
+            <h3><i class="fas fa-search"></i> Scan Website</h3>
+            <form id="scanForm">
+                <div class="mb-3">
+                    <label for="url" class="form-label">Target URL</label>
+                    <input type="url" class="form-control" id="url" placeholder="https://example.com" required>
+                </div>
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="crawl">
+                    <label class="form-check-label" for="crawl">Enable crawling (scan multiple pages)</label>
+                </div>
+                <div class="mb-3" id="maxPagesDiv" style="display: none;">
+                    <label for="maxPages" class="form-label">Max Pages to Crawl</label>
+                    <input type="number" class="form-control" id="maxPages" value="20">
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="fas fa-play"></i> Start Scan
+                </button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p class="mt-3">Scanning website for vulnerabilities...</p>
+            <p class="text-muted">This may take a few moments</p>
+        </div>
+
+        <div id="results" style="display: none;">
+            <div class="stats-card">
+                <h3>Scan Results</h3>
+                <div class="stats-number" id="totalVulns">0</div>
+                <p>Vulnerabilities Found</p>
+                <div class="row mt-3">
+                    <div class="col-3">
+                        <div class="small">Critical</div>
+                        <strong id="criticalCount">0</strong>
+                    </div>
+                    <div class="col-3">
+                        <div class="small">High</div>
+                        <strong id="highCount">0</strong>
+                    </div>
+                    <div class="col-3">
+                        <div class="small">Medium</div>
+                        <strong id="mediumCount">0</strong>
+                    </div>
+                    <div class="col-3">
+                        <div class="small">Low</div>
+                        <strong id="lowCount">0</strong>
+                    </div>
+                </div>
+            </div>
+            <div id="vulnerabilitiesList"></div>
+        </div>
+    </div>
+
+    <footer>
+        <p>DarkLight Security Analyzer | Offline Exploitation Guides | Educational Purpose Only</p>
+    </footer>
+
+    <script>
+        document.getElementById('crawl').addEventListener('change', function() {
+            document.getElementById('maxPagesDiv').style.display = this.checked ? 'block' : 'none';
+        });
+
+        document.getElementById('scanForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const url = document.getElementById('url').value;
+            const crawl = document.getElementById('crawl').checked;
+            const maxPages = document.getElementById('maxPages').value;
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, crawl, max_pages: parseInt(maxPages) })
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                document.getElementById('totalVulns').textContent = data.total;
+                
+                let critical = 0, high = 0, medium = 0, low = 0;
+                data.vulnerabilities.forEach(v => {
+                    if (v.severity === 'Critical') critical++;
+                    else if (v.severity === 'High') high++;
+                    else if (v.severity === 'Medium') medium++;
+                    else if (v.severity === 'Low') low++;
+                });
+                
+                document.getElementById('criticalCount').textContent = critical;
+                document.getElementById('highCount').textContent = high;
+                document.getElementById('mediumCount').textContent = medium;
+                document.getElementById('lowCount').textContent = low;
+                
+                const vulnsList = document.getElementById('vulnerabilitiesList');
+                vulnsList.innerHTML = '';
+                
+                data.vulnerabilities.forEach((vuln, index) => {
+                    const guide = vuln.exploitation_guide;
+                    const card = document.createElement('div');
+                    card.className = 'vuln-card';
+                    card.innerHTML = `
+                        <div class="vuln-header severity-${vuln.severity}" onclick="toggleVuln(${index})">
+                            <div class="vuln-title">
+                                ${vuln.type.replace(/_/g, ' ').toUpperCase()}
+                                <span class="severity-badge badge-${vuln.severity}">${vuln.severity}</span>
+                            </div>
+                            <div class="vuln-location">
+                                <i class="fas fa-map-marker-alt"></i> ${escapeHtml(vuln.location)}
+                                ${vuln.line_number ? `<span class="ms-2"><i class="fas fa-code"></i> Line ${vuln.line_number}</span>` : ''}
+                            </div>
+                            <div class="mt-2">
+                                <small>${escapeHtml(vuln.description.substring(0, 150))}...</small>
+                            </div>
+                        </div>
+                        <div class="vuln-content" id="content-${index}">
+                            <h5><i class="fas fa-code"></i> Vulnerable Code</h5>
+                            <div class="code-snippet">
+                                ${vuln.line_number ? `<div class="line-number"><i class="fas fa-hashtag"></i> Line ${vuln.line_number}</div>` : ''}
+                                <pre><code>${escapeHtml(vuln.code_snippet || 'No code snippet available')}</code></pre>
+                            </div>
+                            
+                            <div class="exploit-section">
+                                <h4><i class="fas fa-bug"></i> How to Exploit</h4>
+                                <div style="white-space: pre-wrap;">${escapeHtml(guide.how_to_exploit || 'No exploitation guide available')}</div>
+                            </div>
+                            
+                            <div class="exploit-section">
+                                <h4><i class="fas fa-tools"></i> Tools to Use</h4>
+                                <div style="white-space: pre-wrap;">${escapeHtml(guide.tools || 'No tools listed')}</div>
+                            </div>
+                            
+                            <div class="exploit-section">
+                                <h4><i class="fas fa-book"></i> Resources</h4>
+                                <div style="white-space: pre-wrap;">${escapeHtml(guide.resources || 'No resources available')}</div>
+                            </div>
+                        </div>
+                    `;
+                    vulnsList.appendChild(card);
+                });
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').style.display = 'none';
+                alert('Error scanning website: ' + error.message);
+            }
+        });
+        
+        function toggleVuln(index) {
+            const content = document.getElementById(`content-${index}`);
+            content.classList.toggle('active');
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
