@@ -46,8 +46,8 @@ class WebVulnerabilityAnalyzer:
         self.ollama_client = OllamaClient(self.config)
         self.reporter = ReportGenerator()
     
-    async def analyze_url(self, url: str, crawl: bool = False, max_pages: int = 50, use_ai: bool = True) -> None:
-        """Main analysis workflow"""
+    async def analyze_url(self, url: str, crawl: bool = False, max_pages: int = 50, use_ai: bool = True, ai_limit: int = 5, delay: float = 0.5) -> None:
+        """Main analysis workflow with CPU optimization"""
         console.print(Panel.fit(
             f"[bold cyan]Web Vulnerability Analyzer[/bold cyan]\nTarget: {url}",
             border_style="cyan"
@@ -90,9 +90,12 @@ class WebVulnerabilityAnalyzer:
         # Step 3: Get AI analysis from Ollama (if enabled)
         if use_ai and all_vulnerabilities:
             console.print(f"\n[bold yellow]Step 3: Getting AI analysis from Ollama...[/bold yellow]")
-            console.print("[yellow]This may take a moment depending on the number of vulnerabilities...[/yellow]")
+            console.print(f"[yellow]AI limit set to {ai_limit} vulnerabilities (use --ai-limit to change)[/yellow]")
             
-            analyzed_vulnerabilities = await self.ollama_client.analyze_multiple_vulnerabilities(all_vulnerabilities)
+            analyzed_vulnerabilities = await self.ollama_client.analyze_multiple_vulnerabilities(
+                all_vulnerabilities, 
+                max_ai_analyses=ai_limit
+            )
             
             # Generate summary
             summary = await self.ollama_client.generate_summary(analyzed_vulnerabilities)
@@ -175,6 +178,8 @@ async def main():
     parser.add_argument("--max-pages", type=int, default=50, help="Maximum pages to crawl (default: 50)")
     parser.add_argument("--config", default="config.yaml", help="Configuration file path")
     parser.add_argument("--no-ai", action="store_true", help="Disable AI analysis")
+    parser.add_argument("--ai-limit", type=int, default=5, help="Maximum number of vulnerabilities to analyze with AI (default: 5)")
+    parser.add_argument("--delay", type=float, default=0.5, help="Delay between requests in seconds (default: 0.5)")
     
     args = parser.parse_args()
     
@@ -187,7 +192,14 @@ async def main():
     analyzer = WebVulnerabilityAnalyzer(args.config)
     
     try:
-        await analyzer.analyze_url(args.url, args.crawl, args.max_pages, use_ai=not args.no_ai)
+        await analyzer.analyze_url(
+            args.url, 
+            args.crawl, 
+            args.max_pages, 
+            use_ai=not args.no_ai,
+            ai_limit=args.ai_limit,
+            delay=args.delay
+        )
     except KeyboardInterrupt:
         console.print("\n[red]Scan interrupted by user[/red]")
         sys.exit(1)

@@ -1,5 +1,5 @@
 ollama:
-  model: "llama3.2:latest"  # Changed from llama2 to llama3.2
+  model: "llama3.2:latest"
   base_url: "http://localhost:11434"
   temperature: 0.3
   max_tokens: 2000
@@ -7,7 +7,13 @@ ollama:
 scan:
   timeout: 10
   max_pages: 50
-  user_agent: "WebVulnAnalyzer/1.0"
+  user_agent: "DarkLight/1.0"
+
+performance:
+  request_delay: 0.5
+  max_concurrent_ai: 2
+  ai_limit_default: 5
+  cpu_threshold: 70
   
 vulnerability_patterns:
   sql_injection:

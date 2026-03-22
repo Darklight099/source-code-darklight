@@ -1,5 +1,6 @@
 import aiohttp
 import json
+import asyncio
 from typing import Dict, List, Optional
 import logging
 from colorama import Fore, Style
@@ -16,7 +17,10 @@ class OllamaClient:
         self.logger = logging.getLogger(__name__)
         
     async def analyze_vulnerability(self, vulnerability: Dict) -> Dict:
-        """Send vulnerability to Ollama for detailed analysis"""
+        """Send vulnerability to Ollama for detailed analysis with rate limiting"""
+        # Add delay to prevent CPU spikes
+        await asyncio.sleep(0.5)
+        
         try:
             prompt = self._create_analysis_prompt(vulnerability)
             
@@ -31,7 +35,8 @@ class OllamaClient:
                             "temperature": self.temperature,
                             "num_predict": self.max_tokens
                         }
-                    }
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60)
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
@@ -39,18 +44,48 @@ class OllamaClient:
                     else:
                         self.logger.error(f"Ollama API error: {response.status}")
                         return self._create_fallback_analysis(vulnerability)
+        except asyncio.TimeoutError:
+            self.logger.error(f"Ollama timeout for {vulnerability['type']}")
+            return self._create_fallback_analysis(vulnerability)
         except Exception as e:
             self.logger.error(f"Error calling Ollama: {str(e)}")
             return self._create_fallback_analysis(vulnerability)
     
-    async def analyze_multiple_vulnerabilities(self, vulnerabilities: List[Dict]) -> List[Dict]:
-        """Analyze multiple vulnerabilities with Ollama"""
+    async def analyze_multiple_vulnerabilities(self, vulnerabilities: List[Dict], max_ai_analyses: int = 5) -> List[Dict]:
+        """Analyze multiple vulnerabilities with Ollama with CPU limits"""
         analyzed_vulns = []
         
-        for i, vuln in enumerate(vulnerabilities, 1):
-            print(f"{Fore.YELLOW}[*] Analyzing vulnerability {i}/{len(vulnerabilities)}: {vuln['type']}{Style.RESET_ALL}")
-            analyzed = await self.analyze_vulnerability(vuln)
-            analyzed_vulns.append(analyzed)
+        if not vulnerabilities:
+            return analyzed_vulns
+        
+        # Limit to max_ai_analyses to prevent CPU overload
+        to_analyze = vulnerabilities[:max_ai_analyses]
+        remaining = vulnerabilities[max_ai_analyses:]
+        
+        if remaining:
+            print(f"{Fore.YELLOW}[!] Limiting AI analysis to first {max_ai_analyses} vulnerabilities (remaining {len(remaining)} will use fallback){Style.RESET_ALL}")
+        
+        print(f"{Fore.YELLOW}[*] Starting AI analysis for {len(to_analyze)} vulnerabilities...{Style.RESET_ALL}")
+        
+        # Process with concurrency limit of 2 to prevent CPU spikes
+        semaphore = asyncio.Semaphore(2)
+        
+        async def process_with_limit(vuln, index):
+            async with semaphore:
+                print(f"{Fore.CYAN}[*] Analyzing {index}/{len(to_analyze)}: {vuln['type']} ({vuln['severity']}){Style.RESET_ALL}")
+                analyzed = await self.analyze_vulnerability(vuln)
+                return analyzed
+        
+        # Process AI analyses with concurrency limit
+        tasks = [process_with_limit(vuln, i+1) for i, vuln in enumerate(to_analyze)]
+        ai_analyzed = await asyncio.gather(*tasks)
+        analyzed_vulns.extend(ai_analyzed)
+        
+        # Add fallback analysis for remaining vulnerabilities
+        if remaining:
+            print(f"{Fore.YELLOW}[*] Using fallback analysis for remaining {len(remaining)} vulnerabilities{Style.RESET_ALL}")
+            for vuln in remaining:
+                analyzed_vulns.append(self._create_fallback_analysis(vuln))
         
         return analyzed_vulns
     
@@ -69,7 +104,7 @@ class OllamaClient:
         prompt += '2. IMPACT: What could an attacker do if they exploit this?\n'
         prompt += '3. REMEDIATION: How to fix this vulnerability (with code examples if applicable)\n'
         prompt += '4. PREVENTION: Best practices to prevent this type of vulnerability in the future\n\n'
-        prompt += 'Format your response with these sections clearly marked.'
+        prompt += 'Format your response with these sections clearly marked. Keep responses concise (max 200 words).'
         return prompt
     
     def _parse_ollama_response(self, response: str, original_vuln: Dict) -> Dict:
@@ -127,8 +162,9 @@ class OllamaClient:
         
         prompt = f"Generate a comprehensive security summary based on these {len(vulnerabilities)} vulnerabilities found during the scan:\n\n"
         
+        # Limit to first 10 vulnerabilities to keep prompt size manageable
         for i, vuln in enumerate(vulnerabilities[:10], 1):
-            prompt += f"{i}. {vuln['type']} (Severity: {vuln['severity']}) - {vuln['description']}\n"
+            prompt += f"{i}. {vuln['type']} (Severity: {vuln['severity']}) - {vuln['description'][:100]}\n"
         
         prompt += "\n\nPlease provide:\n"
         prompt += "1. Executive Summary\n"
@@ -148,9 +184,10 @@ class OllamaClient:
                         "stream": False,
                         "options": {
                             "temperature": 0.3,
-                            "num_predict": 1500
+                            "num_predict": 1000
                         }
-                    }
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
                     if response.status == 200:
                         result = await response.json()
