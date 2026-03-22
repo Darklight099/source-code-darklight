@@ -22,6 +22,10 @@ import yaml
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'darklight-secret-key-2024'
 
+# Create scan history directory
+SCAN_HISTORY_DIR = os.path.join(os.path.dirname(__file__), 'scan_history')
+os.makedirs(SCAN_HISTORY_DIR, exist_ok=True)
+
 # Load config
 config_path = os.path.join(os.path.dirname(__file__), '..', 'config.yaml')
 with open(config_path, 'r') as f:
@@ -343,6 +347,76 @@ def scan():
         'total': len(vulnerabilities),
         'report_path': report_path
     })
+
+@app.route('/save_scan', methods=['POST'])
+def save_scan():
+    """Save scan results to a file"""
+    try:
+        data = request.json
+        scan_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(SCAN_HISTORY_DIR, f"scan_{scan_id}.json")
+        
+        # Add metadata
+        data['scan_id'] = scan_id
+        data['saved_at'] = datetime.now().isoformat()
+        
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'scan_id': scan_id,
+            'message': f'Scan saved as {scan_id}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/load_scans', methods=['GET'])
+def load_scans():
+    """Get list of saved scans"""
+    try:
+        scans = []
+        for filename in os.listdir(SCAN_HISTORY_DIR):
+            if filename.endswith('.json'):
+                filepath = os.path.join(SCAN_HISTORY_DIR, filename)
+                with open(filepath, 'r') as f:
+                    scan_data = json.load(f)
+                    scans.append({
+                        'scan_id': scan_data.get('scan_id', filename.replace('.json', '').replace('scan_', '')),
+                        'saved_at': scan_data.get('saved_at', 'Unknown'),
+                        'url': scan_data.get('url', 'Unknown'),
+                        'total_vulns': len(scan_data.get('vulnerabilities', []))
+                    })
+        # Sort by date, newest first
+        scans.sort(key=lambda x: x['saved_at'], reverse=True)
+        return jsonify({'scans': scans})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/load_scan/<scan_id>', methods=['GET'])
+def load_scan(scan_id):
+    """Load a specific saved scan"""
+    try:
+        filename = os.path.join(SCAN_HISTORY_DIR, f"scan_{scan_id}.json")
+        if not os.path.exists(filename):
+            return jsonify({'error': 'Scan not found'}), 404
+        
+        with open(filename, 'r') as f:
+            scan_data = json.load(f)
+        return jsonify(scan_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/delete_scan/<scan_id>', methods=['DELETE'])
+def delete_scan(scan_id):
+    """Delete a saved scan"""
+    try:
+        filename = os.path.join(SCAN_HISTORY_DIR, f"scan_{scan_id}.json")
+        if os.path.exists(filename):
+            os.remove(filename)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/report/<path:filename>')
 def download_report(filename):

@@ -116,14 +116,6 @@
             color: #667eea;
             margin-bottom: 15px;
         }
-        .tool-command {
-            background: #2d2d2d;
-            color: #00ff00;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            margin: 10px 0;
-        }
         .loading {
             text-align: center;
             padding: 40px;
@@ -165,6 +157,17 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+        .btn-save {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .btn-save:hover {
+            background: #218838;
+        }
     </style>
 </head>
 <body>
@@ -203,6 +206,12 @@
             </form>
         </div>
 
+        <!-- Saved Scans Section -->
+        <div class="scan-card" id="savedScansSection" style="display: none;">
+            <h3><i class="fas fa-history"></i> Saved Scans</h3>
+            <div id="savedScansList"></div>
+        </div>
+
         <div class="loading" id="loading">
             <div class="spinner"></div>
             <p class="mt-3">Scanning website for vulnerabilities...</p>
@@ -233,6 +242,13 @@
                     </div>
                 </div>
             </div>
+            
+            <div class="mb-3" style="text-align: right;">
+                <button id="saveScanBtn" class="btn btn-success" onclick="saveCurrentScan()">
+                    <i class="fas fa-save"></i> Save This Scan
+                </button>
+            </div>
+            
             <div id="vulnerabilitiesList"></div>
         </div>
     </div>
@@ -242,6 +258,8 @@
     </footer>
 
     <script>
+        let currentScanResults = null;
+        
         document.getElementById('crawl').addEventListener('change', function() {
             document.getElementById('maxPagesDiv').style.display = this.checked ? 'block' : 'none';
         });
@@ -255,6 +273,7 @@
             
             document.getElementById('loading').style.display = 'block';
             document.getElementById('results').style.display = 'none';
+            document.getElementById('savedScansSection').style.display = 'none';
             
             try {
                 const response = await fetch('/scan', {
@@ -264,71 +283,13 @@
                 });
                 
                 const data = await response.json();
+                currentScanResults = data;
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('results').style.display = 'block';
                 
-                document.getElementById('totalVulns').textContent = data.total;
-                
-                let critical = 0, high = 0, medium = 0, low = 0;
-                data.vulnerabilities.forEach(v => {
-                    if (v.severity === 'Critical') critical++;
-                    else if (v.severity === 'High') high++;
-                    else if (v.severity === 'Medium') medium++;
-                    else if (v.severity === 'Low') low++;
-                });
-                
-                document.getElementById('criticalCount').textContent = critical;
-                document.getElementById('highCount').textContent = high;
-                document.getElementById('mediumCount').textContent = medium;
-                document.getElementById('lowCount').textContent = low;
-                
-                const vulnsList = document.getElementById('vulnerabilitiesList');
-                vulnsList.innerHTML = '';
-                
-                data.vulnerabilities.forEach((vuln, index) => {
-                    const guide = vuln.exploitation_guide;
-                    const card = document.createElement('div');
-                    card.className = 'vuln-card';
-                    card.innerHTML = `
-                        <div class="vuln-header severity-${vuln.severity}" onclick="toggleVuln(${index})">
-                            <div class="vuln-title">
-                                ${vuln.type.replace(/_/g, ' ').toUpperCase()}
-                                <span class="severity-badge badge-${vuln.severity}">${vuln.severity}</span>
-                            </div>
-                            <div class="vuln-location">
-                                <i class="fas fa-map-marker-alt"></i> ${escapeHtml(vuln.location)}
-                                ${vuln.line_number ? `<span class="ms-2"><i class="fas fa-code"></i> Line ${vuln.line_number}</span>` : ''}
-                            </div>
-                            <div class="mt-2">
-                                <small>${escapeHtml(vuln.description.substring(0, 150))}...</small>
-                            </div>
-                        </div>
-                        <div class="vuln-content" id="content-${index}">
-                            <h5><i class="fas fa-code"></i> Vulnerable Code</h5>
-                            <div class="code-snippet">
-                                ${vuln.line_number ? `<div class="line-number"><i class="fas fa-hashtag"></i> Line ${vuln.line_number}</div>` : ''}
-                                <pre><code>${escapeHtml(vuln.code_snippet || 'No code snippet available')}</code></pre>
-                            </div>
-                            
-                            <div class="exploit-section">
-                                <h4><i class="fas fa-bug"></i> How to Exploit</h4>
-                                <div style="white-space: pre-wrap;">${escapeHtml(guide.how_to_exploit || 'No exploitation guide available')}</div>
-                            </div>
-                            
-                            <div class="exploit-section">
-                                <h4><i class="fas fa-tools"></i> Tools to Use</h4>
-                                <div style="white-space: pre-wrap;">${escapeHtml(guide.tools || 'No tools listed')}</div>
-                            </div>
-                            
-                            <div class="exploit-section">
-                                <h4><i class="fas fa-book"></i> Resources</h4>
-                                <div style="white-space: pre-wrap;">${escapeHtml(guide.resources || 'No resources available')}</div>
-                            </div>
-                        </div>
-                    `;
-                    vulnsList.appendChild(card);
-                });
+                displayScanResults(data);
+                loadSavedScansList();
                 
             } catch (error) {
                 console.error('Error:', error);
@@ -336,6 +297,70 @@
                 alert('Error scanning website: ' + error.message);
             }
         });
+        
+        function displayScanResults(data) {
+            document.getElementById('totalVulns').textContent = data.total;
+            
+            let critical = 0, high = 0, medium = 0, low = 0;
+            data.vulnerabilities.forEach(v => {
+                if (v.severity === 'Critical') critical++;
+                else if (v.severity === 'High') high++;
+                else if (v.severity === 'Medium') medium++;
+                else if (v.severity === 'Low') low++;
+            });
+            
+            document.getElementById('criticalCount').textContent = critical;
+            document.getElementById('highCount').textContent = high;
+            document.getElementById('mediumCount').textContent = medium;
+            document.getElementById('lowCount').textContent = low;
+            
+            const vulnsList = document.getElementById('vulnerabilitiesList');
+            vulnsList.innerHTML = '';
+            
+            data.vulnerabilities.forEach((vuln, index) => {
+                const guide = vuln.exploitation_guide;
+                const card = document.createElement('div');
+                card.className = 'vuln-card';
+                card.innerHTML = `
+                    <div class="vuln-header severity-${vuln.severity}" onclick="toggleVuln(${index})">
+                        <div class="vuln-title">
+                            ${vuln.type.replace(/_/g, ' ').toUpperCase()}
+                            <span class="severity-badge badge-${vuln.severity}">${vuln.severity}</span>
+                        </div>
+                        <div class="vuln-location">
+                            <i class="fas fa-map-marker-alt"></i> ${escapeHtml(vuln.location)}
+                            ${vuln.line_number ? `<span class="ms-2"><i class="fas fa-code"></i> Line ${vuln.line_number}</span>` : ''}
+                        </div>
+                        <div class="mt-2">
+                            <small>${escapeHtml(vuln.description.substring(0, 150))}...</small>
+                        </div>
+                    </div>
+                    <div class="vuln-content" id="content-${index}">
+                        <h5><i class="fas fa-code"></i> Vulnerable Code</h5>
+                        <div class="code-snippet">
+                            ${vuln.line_number ? `<div class="line-number"><i class="fas fa-hashtag"></i> Line ${vuln.line_number}</div>` : ''}
+                            <pre><code>${escapeHtml(vuln.code_snippet || 'No code snippet available')}</code></pre>
+                        </div>
+                        
+                        <div class="exploit-section">
+                            <h4><i class="fas fa-bug"></i> How to Exploit</h4>
+                            <div style="white-space: pre-wrap;">${escapeHtml(guide.how_to_exploit || 'No exploitation guide available')}</div>
+                        </div>
+                        
+                        <div class="exploit-section">
+                            <h4><i class="fas fa-tools"></i> Tools to Use</h4>
+                            <div style="white-space: pre-wrap;">${escapeHtml(guide.tools || 'No tools listed')}</div>
+                        </div>
+                        
+                        <div class="exploit-section">
+                            <h4><i class="fas fa-book"></i> Resources</h4>
+                            <div style="white-space: pre-wrap;">${escapeHtml(guide.resources || 'No resources available')}</div>
+                        </div>
+                    </div>
+                `;
+                vulnsList.appendChild(card);
+            });
+        }
         
         function toggleVuln(index) {
             const content = document.getElementById(`content-${index}`);
@@ -348,6 +373,112 @@
             div.textContent = text;
             return div.innerHTML;
         }
+        
+        // Save current scan
+        async function saveCurrentScan() {
+            if (!currentScanResults) {
+                alert('No scan results to save');
+                return;
+            }
+            
+            const response = await fetch('/save_scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: document.getElementById('url').value,
+                    crawl: document.getElementById('crawl').checked,
+                    max_pages: document.getElementById('maxPages').value,
+                    vulnerabilities: currentScanResults.vulnerabilities,
+                    total: currentScanResults.total,
+                    saved_at: new Date().toISOString()
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(`✅ Scan saved! ID: ${data.scan_id}`);
+                loadSavedScansList();
+            } else {
+                alert('Error saving scan: ' + data.error);
+            }
+        }
+        
+        // Load list of saved scans
+        async function loadSavedScansList() {
+            const response = await fetch('/load_scans');
+            const data = await response.json();
+            
+            if (data.scans && data.scans.length > 0) {
+                document.getElementById('savedScansSection').style.display = 'block';
+                const listHtml = `
+                    <div class="row">
+                        ${data.scans.map(scan => `
+                            <div class="col-md-4 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">${escapeHtml(scan.url.substring(0, 50))}</h5>
+                                        <p class="card-text">
+                                            <small>${new Date(scan.saved_at).toLocaleString()}</small><br>
+                                            <strong>${scan.total_vulns}</strong> vulnerabilities
+                                        </p>
+                                        <button class="btn btn-primary btn-sm" onclick="loadScan('${scan.scan_id}')">
+                                            <i class="fas fa-folder-open"></i> Load
+                                        </button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteScan('${scan.scan_id}')">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                document.getElementById('savedScansList').innerHTML = listHtml;
+            } else {
+                document.getElementById('savedScansSection').style.display = 'none';
+            }
+        }
+        
+        // Load a saved scan
+        async function loadScan(scanId) {
+            const response = await fetch(`/load_scan/${scanId}`);
+            const data = await response.json();
+            
+            if (data.error) {
+                alert('Error loading scan: ' + data.error);
+                return;
+            }
+            
+            currentScanResults = data;
+            displayScanResults(data);
+            
+            document.getElementById('url').value = data.url;
+            document.getElementById('crawl').checked = data.crawl;
+            document.getElementById('maxPages').value = data.max_pages;
+            document.getElementById('results').style.display = 'block';
+            
+            alert(`✅ Loaded scan from ${new Date(data.saved_at).toLocaleString()}`);
+        }
+        
+        // Delete a saved scan
+        async function deleteScan(scanId) {
+            if (!confirm('Are you sure you want to delete this scan?')) return;
+            
+            const response = await fetch(`/delete_scan/${scanId}`, {
+                method: 'DELETE'
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('Scan deleted');
+                loadSavedScansList();
+            } else {
+                alert('Error deleting scan');
+            }
+        }
+        
+        // Load saved scans on page load
+        loadSavedScansList();
     </script>
 </body>
 </html>

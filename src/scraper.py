@@ -97,10 +97,10 @@ class WebScraper:
         }
     
     async def fetch_external_script(self, url: str) -> str:
-        """Fetch external JavaScript file"""
+        """Fetch external JavaScript file with timeout"""
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
                     if response.status == 200:
                         text = await response.text()
                         try:
@@ -112,11 +112,11 @@ class WebScraper:
         return ""
     
     async def crawl_site(self, start_url: str, max_pages: int = 50) -> List[Dict]:
-        """Crawl the website and collect all pages"""
+        """Crawl the website and collect all pages with rate limiting"""
         pages_data = []
         to_visit = [start_url]
         visited_count = 0
-        
+
         while to_visit and visited_count < max_pages:
             current_url = to_visit.pop(0)
             
@@ -131,6 +131,9 @@ class WebScraper:
             if page_data:
                 pages_data.append(page_data)
                 visited_count += 1
+                
+                # Add rate limiting - wait between requests
+                await asyncio.sleep(0.5)
                 
                 # Add new links to visit
                 for link in page_data['links']:
